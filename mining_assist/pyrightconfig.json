@@ -1,0 +1,35 @@
+{
+  "defineConstant": {
+    "DEBUG": true
+  },
+  "exclude": [
+    "**/__pycache__",
+    "**/*.pyc",
+    ".venv",
+    "build",
+    "dist"
+  ],
+  "executionEnvironments": [
+    {
+      "extraPaths": [
+        "src"
+      ],
+      "root": "src"
+    }
+  ],
+  "include": [
+    "src",
+    "scripts",
+    "tests"
+  ],
+  "pythonPlatform": "Windows",
+  "pythonVersion": "3.11",
+  "reportGeneralTypeIssues": true,
+  "reportMissingImports": true,
+  "reportMissingModuleSource": false,
+  "reportMissingTypeStubs": false,
+  "reportOptionalMemberAccess": true,
+  "reportOptionalSubscript": true,
+  "reportPrivateImportUsage": true,
+  "stubPath": "src"
+}

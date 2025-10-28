@@ -1,0 +1,24 @@
+model: resnet18
+input_size: [128, 72] # width, height
+modes: ["MENU", "FLIGHT", "LOADING"]
+train:
+  batch_size: 128
+  epochs: 10
+  lr: 3e-4
+  weight_decay: 1e-5
+  augment:
+    brightness: 0.1
+    contrast: 0.1
+    horizontal_flip: false
+    rotation: 0
+  validation_split: 0.2
+  early_stopping:
+    patience: 3
+    min_delta: 0.001
+data:
+  normalize: true
+  grayscale: true
+device: auto # auto, cpu, cuda
+logging:
+  log_interval: 10
+  save_interval: 100
