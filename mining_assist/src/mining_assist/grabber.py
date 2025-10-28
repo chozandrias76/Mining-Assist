@@ -71,6 +71,7 @@ class ScreenGrabber:
         self.dxcam_camera = None
         self.mss_instance = None
         self.window_rect = None
+        self.target_hwnd = None  # Handle for the target window
 
         # Performance tracking
         self.frame_count = 0
@@ -120,6 +121,27 @@ class ScreenGrabber:
         if self.target_window:
             self._update_window_region()
 
+    def _window_name_matches(self, target: str, actual: str) -> bool:
+        """Check if window names match, handling whitespace and case differences.
+
+        Args:
+            target: The target window name to search for
+            actual: The actual window title found
+
+        Returns:
+            True if the names match (case-insensitive, whitespace-tolerant)
+        """
+        # Normalize both strings: strip whitespace and convert to lowercase
+        target_normalized = target.strip().lower()
+        actual_normalized = actual.strip().lower()
+
+        # Check for exact match or substring match in either direction
+        return (
+            target_normalized == actual_normalized
+            or target_normalized in actual_normalized
+            or actual_normalized in target_normalized
+        )
+
     def _update_window_region(self):
         """Find and update the target window region."""
         if not self.target_window:
@@ -137,7 +159,7 @@ class ScreenGrabber:
                 if (
                     window_text
                     and self.target_window
-                    and self.target_window.lower() in window_text.lower()
+                    and self._window_name_matches(self.target_window, window_text)
                 ):
                     windows.append((hwnd, window_text))
             return True
@@ -154,6 +176,7 @@ class ScreenGrabber:
                 "width": rect[2] - rect[0],
                 "height": rect[3] - rect[1],
             }
+            self.target_hwnd = hwnd  # Save the window handle
             logging.info(f"Found window '{windows[0][1]}' at {self.window_rect}")
         else:
             logging.warning(f"Window '{self.target_window}' not found")
@@ -267,7 +290,33 @@ class ScreenGrabber:
 
         foreground_hwnd = win32gui.GetForegroundWindow()  # type: ignore
         window_text = win32gui.GetWindowText(foreground_hwnd)  # type: ignore
-        return self.target_window.lower() in window_text.lower()
+        return self._window_name_matches(self.target_window, window_text)
+
+    def bring_window_to_foreground(self) -> bool:
+        """Bring the target window to the foreground.
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.target_window or not WIN32GUI_AVAILABLE:
+            logging.warning(
+                "Cannot bring window to foreground without target window or pywin32"
+            )
+            return False
+
+        if not hasattr(self, "target_hwnd") or not self.target_hwnd:
+            logging.warning("No window handle available to bring to foreground")
+            return False
+
+        try:
+            # Try to bring window to foreground
+            win32gui.SetForegroundWindow(self.target_hwnd)  # type: ignore
+            win32gui.ShowWindow(self.target_hwnd, 9)  # type: ignore  # SW_RESTORE = 9
+            logging.info(f"Brought window '{self.target_window}' to foreground")
+            return True
+        except Exception as e:
+            logging.warning(f"Failed to bring window to foreground: {e}")
+            return False
 
     def close(self):
         """Clean up capture resources."""

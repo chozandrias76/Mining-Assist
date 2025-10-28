@@ -210,6 +210,8 @@ class TeleopRecorder:
         # Recording state
         self.is_recording = False
         self.frame_count = 0
+        self.window_focused = True  # Track window focus state
+        self.frames_skipped_unfocused = 0  # Count frames skipped due to unfocus
         self.session_data = {
             "metadata": {
                 "game_window": game_window,
@@ -230,6 +232,19 @@ class TeleopRecorder:
 
     def start_recording(self):
         """Start recording session."""
+        # Try to bring the target window to foreground before starting
+        if self.grabber.target_window:
+            logging.info(
+                f"Attempting to bring '{self.grabber.target_window}' to foreground..."
+            )
+            if self.grabber.bring_window_to_foreground():
+                # Give the system a moment to bring the window forward
+                time.sleep(0.5)
+            else:
+                logging.warning(
+                    "Failed to bring window to foreground, continuing anyway..."
+                )
+
         self.is_recording = True
         self.session_data["metadata"]["start_time"] = time.time()
 
@@ -245,10 +260,27 @@ class TeleopRecorder:
             while self.is_recording:
                 current_time = time.time()
 
-                # Capture frame at specified FPS
+                # Check if target window is focused
+                window_focused = self.grabber.is_window_focused()
+
+                # Handle focus state changes
+                if window_focused != self.window_focused:
+                    if window_focused:
+                        logging.info(
+                            f"Window '{self.game_window}' gained focus - resuming recording"
+                        )
+                    else:
+                        logging.info(
+                            f"Window '{self.game_window}' lost focus - pausing recording"
+                        )
+                    self.window_focused = window_focused
+
+                # Capture frame at specified FPS (only if window is focused)
                 if current_time - last_frame_time >= self.frame_interval:
-                    with PerformanceTimer() as timer:
-                        success = self._capture_frame_with_data()
+                    if self.window_focused:
+                        with PerformanceTimer() as timer:
+                            success = self._capture_frame_with_data()
+
                         if success:
                             last_frame_time = current_time
                             actual_fps = 1.0 / timer.get_elapsed()
@@ -258,6 +290,18 @@ class TeleopRecorder:
                                 logging.info(
                                     f"Frame {self.frame_count}, FPS: {avg_fps:.1f}"
                                 )
+                    else:
+                        # Window not focused - skip this frame but still update timing
+                        self.frames_skipped_unfocused += 1
+                        last_frame_time = current_time
+
+                        # Log occasionally when paused
+                        if (
+                            self.frames_skipped_unfocused % 50 == 0
+                        ):  # Every ~5 seconds at 10 FPS
+                            logging.info(
+                                f"Recording paused - {self.frames_skipped_unfocused} frames skipped (window not focused)"
+                            )
 
                 # Check for quit condition
                 if "Key.q" in self.input_recorder.current_keys:
@@ -339,6 +383,10 @@ class TeleopRecorder:
         )
 
         logging.info(f"Recording stopped. {self.frame_count} frames in {duration:.1f}s")
+        if self.frames_skipped_unfocused > 0:
+            logging.info(
+                f"Skipped {self.frames_skipped_unfocused} frames due to window not being focused"
+            )
         logging.info(f"Data saved to: {self.output_dir}")
 
     def _save_session_data(self):
@@ -361,6 +409,7 @@ class TeleopRecorder:
 
         summary = {
             "total_frames": self.frame_count,
+            "frames_skipped_unfocused": self.frames_skipped_unfocused,
             "duration": duration,
             "average_fps": average_fps,
             "modes_detected": list(
